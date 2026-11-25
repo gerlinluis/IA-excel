@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>IA en la Nube · DeepSeek</title>
+<style>
+  body{font-family:system-ui,sans-serif;margin:0;padding:12px;background:#0f1115;color:#e6e6e6;display:flex;flex-direction:column;height:95vh}
+  h2{font-size:16px;margin:0 0 8px}
+  #config{background:#161a22;border:1px solid #262b36;border-radius:10px;padding:10px;margin-bottom:8px;display:flex;gap:6px;flex-wrap:wrap}
+  #config input{flex:1;padding:10px;font-size:14px;border-radius:8px;border:1px solid #333;background:#0d1017;color:#eee;min-width:200px}
+  #config button{padding:10px 14px;font-size:14px;border-radius:8px;border:0;background:#1f6f3a;color:#fff;cursor:pointer}
+  #chat{border:1px solid #2a2d36;border-radius:10px;padding:10px;flex:1;overflow-y:auto;background:#161a22;margin-bottom:8px}
+  .u{color:#7ee787;margin:6px 0;white-space:pre-wrap}
+  .b{color:#79c0ff;margin:6px 0;white-space:pre-wrap}
+  .error{color:#ff7b72;margin:6px 0;font-weight:bold}
+  .info{font-size:12px;color:#9aa4b2;margin:4px 0}
+  form{display:flex;gap:6px}
+  input[type=text]{flex:1;padding:12px;font-size:15px;border-radius:8px;border:1px solid #333;background:#0d1017;color:#eee}
+  button.enviar{padding:10px 14px;font-size:14px;border-radius:8px;border:0;background:#2f81f7;color:#fff;cursor:pointer}
+  button.enviar:disabled{background:#333;color:#777}
+</style>
+</head>
+<body>
+
+<h2>IA en la Nube (DeepSeek)</h2>
+
+<!-- PANEL PARA GUARDAR LA LLAVE SIN TOCAR EL CÓDIGO -->
+<div id="config">
+  <input type="password" id="inputKey" placeholder="Pega aquí tu API Key (sk-...)">
+  <button id="btnGuardar">Guardar Llave</button>
+  <div class="info" id="keyStatus" style="width:100%">Estado: Sin llave guardada.</div>
+</div>
+
+<div id="chat"></div>
+
+<form id="f">
+  <input type="text" id="m" placeholder="Escribe algo..." autocomplete="off">
+  <button class="enviar" id="btn" type="submit">Enviar</button>
+</form>
+
+<script>
+const chat = document.getElementById("chat");
+const form = document.getElementById("f");
+const input = document.getElementById("m");
+const btn = document.getElementById("btn");
+const inputKey = document.getElementById("inputKey");
+const btnGuardar = document.getElementById("btnGuardar");
+const keyStatus = document.getElementById("keyStatus");
+
+// Intentar cargar la llave guardada de la memoria del navegador
+let API_KEY = localStorage.getItem("deepseek_api_key") || "";
+
+function actualizarEstadoLlave() {
+  if (API_KEY) {
+    keyStatus.textContent = "✅ Llave guardada y lista para usar.";
+    keyStatus.style.color = "#7ee787";
+  } else {
+    keyStatus.textContent = "❌ Estado: Sin llave guardada. La IA no funcionará.";
+    keyStatus.style.color = "#ff7b72";
+  }
+}
+
+// Guardar la llave en el navegador
+btnGuardar.addEventListener("click", () => {
+  const llave = inputKey.value.trim();
+  if (llave.startsWith("sk-") && llave.length > 20) {
+    API_KEY = llave;
+    localStorage.setItem("deepseek_api_key", API_KEY); // Guardar en la memoria del celular
+    inputKey.value = ""; // Limpiar el campo por seguridad
+    actualizarEstadoLlave();
+    alert("✅ Llave guardada con éxito. Ya puedes chatear.");
+  } else {
+    alert("⚠ La llave parece inválida. Debe empezar con 'sk-' y ser larga.");
+  }
+});
+
+// Verificar estado al abrir la página
+actualizarEstadoLlave();
+
+let historial = [
+  { role: "system", content: "Eres un asistente útil y conciso. Respondes en español." }
+];
+
+function addMsg(txt, cls) {
+  const d = document.createElement("div");
+  d.className = cls;
+  d.textContent = txt;
+  chat.appendChild(d);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  
+  if (!API_KEY) {
+    addMsg("⚠ Error: Primero debes guardar tu API Key arriba.", "error");
+    return;
+  }
+
+  const texto = input.value.trim();
+  if (!texto) return;
+
+  addMsg("Tú: " + texto, "u");
+  input.value = "";
+  btn.disabled = true;
+  btn.textContent = "Pensando...";
+
+  historial.push({ role: "user", content: texto });
+
+  try {
+    const res = await fetch("https://api.deepseek.com/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${API_KEY}`
+      },
+      body: JSON.stringify({
+        model: "deepseek-chat",
+        messages: historial,
+        temperature: 0.7,
+        max_tokens: 500
+      })
+    });
+
+    if (!res.ok) {
+      throw new Error("Error HTTP: " + res.status);
+    }
+
+    const data = await res.json();
+    const respuesta = data.choices[0].message.content;
+
+    addMsg("Bot: " + respuesta, "b");
+    historial.push({ role: "assistant", content: respuesta });
+
+  } catch (error) {
+    addMsg("⚠ Error de conexión: " + error.message, "b error");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Enviar";
+    input.focus();
+  }
+});
+</script>
+</body>
+</html>
